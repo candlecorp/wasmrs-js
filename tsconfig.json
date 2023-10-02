@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "baseUrl": ".",
+    "target": "ES6",
+    "sourceMap": true,
+    "strict": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "types": ["node", "jest"],
+    "declaration": true,
+    "resolveJsonModule": true,
+    "downlevelIteration": true,
+    "outDir": "dist"
+  },
+
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist", "**/__tests__"]
+}
