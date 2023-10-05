@@ -3,9 +3,10 @@
   "description": "A JavaScript implementation of the RSocket protocol over WebAssembly.",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "jest --coverage --detectOpenHandles",
-    "watch": "jest --watchAll --coverage",
-    "build": "tsc"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --detectOpenHandles",
+    "watch:test": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll --coverage",
+    "build": "tsc",
+    "watch": "tsc --watch"
   },
   "dependencies": {
     "@types/debug": "^4.1.9",
@@ -13,7 +14,7 @@
     "rsocket-core": "^1.0.0-alpha.3"
   },
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@msgpack/msgpack": "^3.0.0-beta2",
@@ -24,15 +25,14 @@
     "eslint": "~8.5.0",
     "eslint-plugin-import": "~2.25.3",
     "eslint-plugin-prettier": "^4.0.0",
-    "jest": "^27.5.1",
-    "jest-config": "^27.4.5",
-    "jest-mock-extended": "^2.0.4",
+    "jest": "^29.7.0",
+    "jest-config": "^29.7.0",
     "jest-runner-eslint": "^2.1.2",
     "prettier": "^2.5.1",
     "rsocket-adapter-rxjs": "^1.0.0-alpha.4",
     "rsocket-messaging": "^1.0.0-alpha.3",
     "rxjs": "^7.8.1",
-    "ts-jest": "^27.1.5",
+    "ts-jest": "^29.1.1",
     "typescript": "~4.5.4"
   }
 }

@@ -1,14 +1,14 @@
-import { debug } from './debug';
-import { HostProtocolMethods, WasmRsHostProtocol } from './protocol';
-import { fromU24Bytes } from './utils';
-import { FrameEvent, WasmRsHost } from './wasmrs-host';
+import { debug } from './debug.js';
+import { HostProtocolMethods, WasmRsHostProtocol } from './protocol.js';
+import { fromU24Bytes } from './utils.js';
+import { FrameEvent, WasmRsHost } from './wasmrs-host.js';
 
 export function linkHostExports(
   instance: WasmRsHost
 ): WasmRsHostProtocol & WebAssembly.ModuleImports {
   return {
     [HostProtocolMethods.CONSOLE_LOG](ptr: number, len: number) {
-      debug(() => ['__console_log %o bytes @ %o', len, ptr]);
+      debug('<<< __console_log %o bytes @ %o', len, ptr);
       const buffer = new Uint8Array(instance.getCallerMemory().buffer);
       const bytes = buffer.slice(ptr, ptr + len);
       console.log(instance.textDecoder.decode(bytes));
@@ -18,17 +18,13 @@ export function linkHostExports(
       guestBufferPtr: number,
       hostBufferPtr: number
     ): void {
-      debug(() => [
-        'host fn called: __init_buffers(%o, %o)',
-        guestBufferPtr,
-        hostBufferPtr,
-      ]);
+      debug('<<< __init_buffers(%o, %o)', guestBufferPtr, hostBufferPtr);
       instance.guestBufferStart = guestBufferPtr;
       instance.hostBufferStart = hostBufferPtr;
     },
 
     [HostProtocolMethods.SEND](length: number) {
-      debug(() => ['host fn called: __send(%o)', length]);
+      debug('<<< __send(%o)', length);
 
       const buffer = new Uint8Array(instance.getCallerMemory().buffer);
       const bytes = buffer.slice(
@@ -36,7 +32,7 @@ export function linkHostExports(
         instance.hostBufferStart + length
       );
 
-      debug(() => [
+      debug(
         `onFrame ${bytes.length} bytes`,
         Array.from(bytes)
           .map((n) => {
@@ -46,8 +42,8 @@ export function linkHostExports(
               return `\\x${n.toString(16)}`;
             }
           })
-          .join(''),
-      ]);
+          .join('')
+      );
       let done = false;
       let index = 0;
       while (!done) {
@@ -60,14 +56,14 @@ export function linkHostExports(
     },
 
     [HostProtocolMethods.OP_LIST](ptr: number, length: number) {
-      debug(() => ['host fn called: __op_list(%o)', ptr]);
+      debug('<<< __op_list(%o)', ptr);
 
       const mem = instance.getCallerMemory();
       const buffer = new Uint8Array(mem.buffer);
       const opListData = instance.textDecoder.decode(
         buffer.slice(ptr, ptr + length)
       );
-      debug(() => [`${opListData}`]);
+      debug(`${opListData}`);
     },
   };
 }

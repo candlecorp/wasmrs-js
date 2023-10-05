@@ -1,20 +1,21 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "baseUrl": ".",
-    "target": "ES6",
+    "module": "ESNext",
+    "target": "ESNext",
+    "rootDir": "./",
+    "lib": ["dom", "es2020"],
+    "moduleResolution": "Node",
     "sourceMap": true,
     "strict": true,
     "noEmitOnError": true,
-    "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node", "jest"],
     "declaration": true,
-    "resolveJsonModule": true,
     "downlevelIteration": true,
-    "outDir": "dist"
+    "outDir": "./dist",
+    "typeRoots": ["./types", "./node_modules/@types"],
+    "forceConsistentCasingInFileNames": true
   },
 
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist", "**/__tests__"]
 }

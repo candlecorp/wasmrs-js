@@ -28,8 +28,8 @@ import {
   Outbound,
   serializeFrame,
 } from 'rsocket-core';
-import { FrameEvent, WasmRsHost } from './wasmrs-host';
-import { debug } from './debug';
+import { FrameEvent, WasmRsHost } from './wasmrs-host.js';
+import { debug } from './debug.js';
 
 export class WasmRsDuplexConnection
   extends Deferred
@@ -47,16 +47,16 @@ export class WasmRsDuplexConnection
     super();
     host.addEventListener('frame', (e) => {
       const event = e as FrameEvent;
-      debug(() => [
+      debug(
         `received frame event (%o bytes), %o`,
         event.payload.length,
-        event.payload,
-      ]);
+        event.payload
+      );
 
       const frame = this.deserializer.deserializeFrame(
         Buffer.from(event.payload)
       );
-      debug(() => [`decoded to %o`, frame]);
+      debug(`decoded to %o`, frame);
       this.handleIncomingFrame(frame);
     });
 
@@ -64,7 +64,7 @@ export class WasmRsDuplexConnection
   }
 
   handleIncomingFrame(frame: Frame): void {
-    debug(() => [`received frame`, JSON.stringify(frame)]);
+    debug(`received frame`, JSON.stringify(frame));
 
     this.multiplexerDemultiplexer.handle(frame);
   }
@@ -75,11 +75,11 @@ export class WasmRsDuplexConnection
 
   close(error?: Error) {
     if (this.done) {
-      debug(() => [`closing duplex connection`, error]);
+      debug(`closing duplex connection`, error);
       super.close(error);
       return;
     } else {
-      debug(() => [`not done`, error]);
+      debug(`not done`, error);
     }
 
     this.host.close();
@@ -89,7 +89,7 @@ export class WasmRsDuplexConnection
 
   send(frame: Frame): void {
     // Only send frame types supported by WasmRS
-    debug(() => [`sending frame type`, frame.type]);
+    debug(`sending frame type`, frame.type);
     switch (frame.type) {
       case FrameTypes.REQUEST_RESPONSE:
       case FrameTypes.REQUEST_CHANNEL:
@@ -101,23 +101,23 @@ export class WasmRsDuplexConnection
       case FrameTypes.PAYLOAD:
         break;
       case FrameTypes.KEEPALIVE:
-        debug(() => [
+        debug(
           `responding to keepalive from duplex connection`,
-          JSON.stringify(frame),
-        ]);
+          JSON.stringify(frame)
+        );
         if ((frame.flags & Flags.RESPOND) == Flags.RESPOND) {
           frame.flags ^= Flags.RESPOND;
-          debug(() => [`responded with`, JSON.stringify(frame)]);
+          debug(`responded with`, JSON.stringify(frame));
 
           this.handleIncomingFrame(frame);
         }
         return;
       default:
-        debug(() => [`ignoring frame`, JSON.stringify(frame)]);
+        debug(`ignoring frame`, JSON.stringify(frame));
         return;
     }
 
-    debug(() => [`sending frame`, JSON.stringify(frame)]);
+    debug(`sending frame`, JSON.stringify(frame));
     if (this.done) {
       return;
     }

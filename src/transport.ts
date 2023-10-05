@@ -8,26 +8,24 @@ import {
   Multiplexer,
   Outbound,
 } from 'rsocket-core';
-import { WasmRsDuplexConnection } from './duplex-connection';
-import { Options, WasmRsHost, instantiate } from './wasmrs-host';
-import { promises } from 'fs';
-import { debug } from './debug';
-const { readFile } = promises;
+import { WasmRsDuplexConnection } from './duplex-connection.js';
+import { Options, WasmRsHost, instantiate } from './wasmrs-host.js';
+import { debug } from './debug.js';
 
 export type ClientOptions = {
-  path: string;
+  bytes?: ArrayBufferLike;
+  byteStream?: ReadableStream<Uint8Array>;
   hostCreator?: (path: string, options?: Options) => WasmRsHost;
   debug?: boolean;
   options?: Options;
 };
 
 export class WasmRsTransport implements ClientTransport {
-  private readonly path: string;
-  // private readonly factory: (path: string) => WasmRsHost;
+  private readonly byteStream?: ReadableStream<ArrayBufferLike>;
+  private readonly bytes?: ArrayBufferLike;
 
   constructor(private options: ClientOptions) {
-    this.path = options.path;
-    // this.factory = options.wsCreator ?? ((url: string) => new WebSocket(url));
+    this.bytes = options.bytes;
   }
 
   connect(
@@ -36,11 +34,11 @@ export class WasmRsTransport implements ClientTransport {
     ) => Multiplexer & Demultiplexer & FrameHandler
   ): Promise<DuplexConnection> {
     return new Promise((resolve, reject) => {
-      readFile(this.path)
-        .then((buffer) => {
-          debug(() => [`starting reading bytes from ${this.path}`]);
-          return instantiate(buffer, this.options.options).then((instance) => {
-            debug(() => [`instantiated wasm from ${this.path}`]);
+      if (this.bytes) {
+        debug(`starting reading bytes from memory`);
+        instantiate(this.bytes, this.options.options)
+          .then((instance) => {
+            debug(`instantiated wasm from memory`);
             resolve(
               new WasmRsDuplexConnection(
                 instance,
@@ -48,9 +46,26 @@ export class WasmRsTransport implements ClientTransport {
                 multiplexerDemultiplexerFactory
               )
             );
-          });
-        })
-        .catch(reject);
+          })
+          .catch(reject);
+        return;
+      } else if (this.byteStream) {
+        debug(`instantiating from stream`);
+        throw new Error('not implemented');
+        // return instantiateStreaming(
+        //   new Response(ReadableStream.from(this.byteStream)),
+        //   this.options.options
+        // ).then((instance) => {
+        //   debug(() => [`instantiated wasm from stream`);
+        //   resolve(
+        //     new WasmRsDuplexConnection(
+        //       instance,
+        //       new Deserializer(),
+        //       multiplexerDemultiplexerFactory
+        //     )
+        //   );
+        // });
+      }
     });
   }
 }

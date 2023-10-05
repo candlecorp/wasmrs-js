@@ -1,10 +1,10 @@
-import { debug } from './debug';
-import * as errors from './errors';
-import { linkHostExports } from './callbacks';
-import { HostCallNotImplementedError } from './errors';
-import { GuestProtocolMethods, WasmRsGuestProtocol } from './protocol';
-import { WASI } from 'wasi';
-import { toU24Bytes } from './utils';
+import { debug } from './debug.js';
+import * as errors from './errors.js';
+import { linkHostExports } from './callbacks.js';
+import { HostCallNotImplementedError } from './errors.js';
+import { GuestProtocolMethods, WasmRsGuestProtocol } from './protocol.js';
+import { WASI } from './wasi.js';
+import { toU24Bytes } from './utils.js';
 
 type HostCall = (
   binding: string,
@@ -60,7 +60,7 @@ export class WasmRsHost extends EventTarget {
     this.guestOpListRequest = () => undefined;
   }
 
-  async instantiate(source: Uint8Array, wasi?: WASI): Promise<WasmRsHost> {
+  async instantiate(source: ArrayBufferLike, wasi?: WASI): Promise<WasmRsHost> {
     const imports = this.getImports(wasi);
     const result = await WebAssembly.instantiate(source, imports).catch((e) => {
       throw new errors.InvalidWasm(e);
@@ -80,9 +80,9 @@ export class WasmRsHost extends EventTarget {
   ): Promise<WasmRsHost> {
     const imports = this.getImports(wasi);
     if (!WebAssembly.instantiateStreaming) {
-      debug(() => [
-        'WebAssembly.instantiateStreaming is not supported on this browser, wasm execution will be impacted.',
-      ]);
+      debug(
+        'WebAssembly.instantiateStreaming is not supported on this browser, wasm execution will be impacted.'
+      );
       const bytes = new Uint8Array(await (await source).arrayBuffer());
       return this.instantiate(bytes, wasi);
     } else {
@@ -102,15 +102,16 @@ export class WasmRsHost extends EventTarget {
 
   getImports(wasi?: WASI): WebAssembly.Imports {
     if (wasi) {
-      debug(() => ['enabling wasi']);
+      debug('enabling wasi');
       // This looks like a broken types issue in the wasi module.
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore
-      const imports = wasi.getImportObject();
-      imports.wasmrs = linkHostExports(this);
-      return imports;
+      return {
+        wasi_snapshot_preview1: wasi.wasiImport,
+        wasmrs: linkHostExports(this),
+      };
     } else {
-      debug(() => ['disabling wasi']);
+      debug('disabling wasi');
       return {
         wasmrs: linkHostExports(this),
       };
@@ -123,27 +124,21 @@ export class WasmRsHost extends EventTarget {
       GuestProtocolMethods.START
     ] as CallableFunction;
     if (start != null) {
-      debug(() => ['calling guest fn: %s()', GuestProtocolMethods.START]);
-
+      debug(`>>>`, `${GuestProtocolMethods.START}()`);
       start([]);
     }
 
     const init = this.getExport(GuestProtocolMethods.INIT);
-    debug(() => [
-      'calling guest fn: %s(%o, %o, %o)',
-      GuestProtocolMethods.INIT,
-      512 * 1024,
-      512 * 1024,
-      512 * 1024,
-    ]);
-    init(512 * 1024, 512 * 1024, 512 * 1024);
+    const size = 512 * 1024;
+    debug(`>>>`, `${GuestProtocolMethods.INIT}(${size},${size},${size})`);
+    init(size, size, size);
 
     this.guestSend = this.getExport(GuestProtocolMethods.SEND);
 
     this.guestOpListRequest = this.getExport(
       GuestProtocolMethods.OP_LIST_REQUEST
     );
-    debug(() => ['initialized wasm module']);
+    debug('initialized wasm module');
   }
 
   getExport<N extends keyof WasmRsGuestProtocol>(
@@ -160,13 +155,14 @@ export class WasmRsHost extends EventTarget {
   send(payload: Buffer): void {
     const memory = this.getCallerMemory();
     const buffer = new Uint8Array(memory.buffer);
-    debug(() => [
+    debug(
       `writing ${payload.length} bytes to guest memory buffer`,
       payload,
-      this.guestBufferStart,
-    ]);
+      this.guestBufferStart
+    );
     buffer.set(toU24Bytes(payload.length), this.guestBufferStart);
     buffer.set(payload, this.guestBufferStart + 3);
+    debug(`>>>`, ` ${GuestProtocolMethods.SEND}(${payload.length})`);
     this.guestSend(payload.length);
   }
 
@@ -192,7 +188,7 @@ export interface Options {
 }
 
 export async function instantiate(
-  source: Uint8Array,
+  source: ArrayBufferLike,
   options: Options = {}
 ): Promise<WasmRsHost> {
   const host = new WasmRsHost(options);
