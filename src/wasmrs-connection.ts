@@ -28,8 +28,9 @@ import {
   Outbound,
   serializeFrame,
 } from 'rsocket-core';
-import { FrameEvent, WasmRsHost } from './wasmrs-host.js';
-import { debug } from './debug.js';
+import { FrameEvent, WasmRsInstance } from './wasmrs.js';
+import DEBUG from 'debug';
+export const debug = DEBUG('wasmrs:connection:wasm');
 
 export class WasmRsDuplexConnection
   extends Deferred
@@ -38,7 +39,7 @@ export class WasmRsDuplexConnection
   readonly multiplexerDemultiplexer: Multiplexer & Demultiplexer & FrameHandler;
 
   constructor(
-    private host: WasmRsHost,
+    private host: WasmRsInstance,
     private deserializer: Deserializer,
     multiplexerDemultiplexerFactory: (
       outbound: Outbound & Closeable
@@ -75,11 +76,9 @@ export class WasmRsDuplexConnection
 
   close(error?: Error) {
     if (this.done) {
-      debug(`closing duplex connection`, error);
+      debug(`closing wasm connection`, error);
       super.close(error);
       return;
-    } else {
-      debug(`not done`, error);
     }
 
     this.host.close();
@@ -89,7 +88,6 @@ export class WasmRsDuplexConnection
 
   send(frame: Frame): void {
     // Only send frame types supported by WasmRS
-    debug(`sending frame type`, frame.type);
     switch (frame.type) {
       case FrameTypes.REQUEST_RESPONSE:
       case FrameTypes.REQUEST_CHANNEL:
@@ -107,8 +105,6 @@ export class WasmRsDuplexConnection
         );
         if ((frame.flags & Flags.RESPOND) == Flags.RESPOND) {
           frame.flags ^= Flags.RESPOND;
-          debug(`responded with`, JSON.stringify(frame));
-
           this.handleIncomingFrame(frame);
         }
         return;

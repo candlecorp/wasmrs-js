@@ -1,6 +1,23 @@
-export interface WASI {
+export interface WasiInterface {
   start(instance: object): void;
   initialize(instance: object): void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  readonly wasiImport: NodeJS.Dict<any>;
+  getImports(): WebAssembly.ModuleImports;
+}
+
+export type Wasi = new (options: WasiOptions) => WasiInterface;
+
+export type WasiOptions = WasiV1Options;
+
+export enum WasiVersions {
+  SnapshotPreview1 = 'preview1',
+}
+
+export interface WasiV1Options {
+  version: WasiVersions.SnapshotPreview1;
+  args?: string[];
+  env?: Record<string, string>;
+  preopens?: Record<string, string>;
+  stdin?: number | undefined;
+  stdout?: number | undefined;
+  stderr?: number | undefined;
 }

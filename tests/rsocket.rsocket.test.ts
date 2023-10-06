@@ -1,9 +1,10 @@
 import { RxRequestersFactory } from 'rsocket-adapter-rxjs';
 import { JSON_CODEC, newConnector } from './utils';
 
+// Temporarily skipped while we re-align with RSocket core.
 describe.skip('rsocket transport impl', () => {
   test('new wasm requestChannel', async () => {
-    const connector = newConnector('wasm_guest.wasm');
+    const connector = await newConnector('wasm_guest.wasm');
     const rsocket = await connector.connect();
     const request = RxRequestersFactory.requestResponse(
       { message: ['Hello World'] },

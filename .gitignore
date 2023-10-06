@@ -2,6 +2,8 @@ node_modules
 **/dist
 **/build
 
+/archive/
+
 .gitpod.yml
 results
 .nyc_output

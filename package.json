@@ -3,21 +3,37 @@
   "description": "A JavaScript implementation of the RSocket protocol over WebAssembly.",
   "license": "Apache-2.0",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --coverage --detectOpenHandles",
+    "test": "npm run test:unit",
+    "test:unit": "npm run build:worker:node && NODE_OPTIONS=--experimental-vm-modules jest --coverage --detectOpenHandles",
     "watch:test": "NODE_OPTIONS=--experimental-vm-modules jest --watchAll --coverage",
-    "build": "tsc",
+    "build": "tsc && npm run build:worker:node && npm run build:worker:browser",
+    "build:worker:node": "rollup -c rollup.config.node.js",
+    "build:worker:browser": "rollup -c rollup.config.browser.js",
     "watch": "tsc --watch"
   },
+  "browser": {
+    "./wasi/index.js": "./dist/src/browser.js"
+  },
   "dependencies": {
-    "@types/debug": "^4.1.9",
+    "@bjorn3/browser_wasi_shim": "file:../browser_wasi_shim",
     "debug": "^4.3.4",
     "rsocket-core": "^1.0.0-alpha.3"
   },
   "type": "module",
-  "main": "dist/src/index.js",
+  "exports": {
+    ".": "./dist/src/index.js",
+    "./worker": "./dist/worker-browser.esm.js",
+    "./worker-node": "./dist/worker-node.esm.js",
+    "./browser": "./dist/src/browser.js",
+    "./package.json": "./package.json"
+  },
   "devDependencies": {
+    "@types/debug": "^4.1.9",
     "@jest/globals": "^29.7.0",
     "@msgpack/msgpack": "^3.0.0-beta2",
+    "@rollup/plugin-commonjs": "^25.0.5",
+    "@rollup/plugin-node-resolve": "^15.2.2",
+    "@rollup/plugin-typescript": "^11.1.5",
     "@types/jest": "^27.0.3",
     "@types/node": "^20.7.2",
     "@typescript-eslint/eslint-plugin": "^6.7.3",
@@ -29,10 +45,12 @@
     "jest-config": "^29.7.0",
     "jest-runner-eslint": "^2.1.2",
     "prettier": "^2.5.1",
+    "rollup": "^4.0.0",
     "rsocket-adapter-rxjs": "^1.0.0-alpha.4",
     "rsocket-messaging": "^1.0.0-alpha.3",
     "rxjs": "^7.8.1",
     "ts-jest": "^29.1.1",
-    "typescript": "~4.5.4"
+    "typescript": "~4.5.4",
+    "web-worker": "^1.2.0"
   }
 }

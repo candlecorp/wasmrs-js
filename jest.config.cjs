@@ -1,7 +1,4 @@
 const path = require('path');
-const { defaultsESM: tsjPreset } = require('ts-jest/presets');
-
-const esModules = ['src/rsocket-core/'].join('|');
 
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 const jestOptions = {
@@ -16,6 +13,7 @@ const jestOptions = {
       },
     ],
   },
+  testMatch: ['**/tests/?(*.)+(spec|test).ts?(x)'],
 
   testPathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/node_modules/'],
   moduleNameMapper: {
