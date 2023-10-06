@@ -1,7 +1,7 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "lib": ["DOM", "es2020"]
+    "lib": ["WebWorker", "es2020"]
   },
 
   "include": ["./**/*"],

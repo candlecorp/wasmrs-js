@@ -75,8 +75,9 @@ export class WasmRsDuplexConnection
   }
 
   close(error?: Error) {
+    debug(`closing wasm connection`);
     if (this.done) {
-      debug(`closing wasm connection`, error);
+      debug(`wasm connection done: `, error);
       super.close(error);
       return;
     }
@@ -99,10 +100,6 @@ export class WasmRsDuplexConnection
       case FrameTypes.PAYLOAD:
         break;
       case FrameTypes.KEEPALIVE:
-        debug(
-          `responding to keepalive from duplex connection`,
-          JSON.stringify(frame)
-        );
         if ((frame.flags & Flags.RESPOND) == Flags.RESPOND) {
           frame.flags ^= Flags.RESPOND;
           this.handleIncomingFrame(frame);

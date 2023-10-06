@@ -4,7 +4,7 @@ export interface WasiInterface {
   getImports(): WebAssembly.ModuleImports;
 }
 
-export type Wasi = new (options: WasiOptions) => WasiInterface;
+export type Wasi = { create(options: WasiOptions): Promise<WasiInterface> };
 
 export type WasiOptions = WasiV1Options;
 

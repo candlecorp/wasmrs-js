@@ -7,12 +7,15 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { WorkerClientTransport } from '../src/worker-transport.js';
 import { WasiOptions, WasiVersions } from '../src/wasi';
-import { WasmRsModule } from '../src/index.js';
-import { RxRequestersFactory } from 'rsocket-adapter-rxjs';
+import { WasmRsModule } from '../src/node/index.js';
+import { RxRequestersFactory } from '@candlecorp/rsocket-adapter-rxjs';
 import { interval, map, take } from 'rxjs';
+import { Operation, OperationList } from '../src/wasmrs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function newConnector(file: string): Promise<RSocketConnector> {
+export async function newConnector(
+  file: string
+): Promise<[RSocketConnector, OperationList]> {
   const wasi = {
     version: WasiVersions.SnapshotPreview1,
     args: [],
@@ -25,8 +28,8 @@ export async function newConnector(file: string): Promise<RSocketConnector> {
     stderr: 2,
   };
   const bytes = readFileSync(path.join(__dirname, file));
-  const module = await WasmRsModule.compile(bytes);
-  const instance = await module.instantiate({ wasi });
+  const mod = await WasmRsModule.compile(bytes);
+  const instance = await mod.instantiate({ wasi });
 
   const connector = new RSocketConnector({
     setup: {
@@ -37,10 +40,14 @@ export async function newConnector(file: string): Promise<RSocketConnector> {
       instance,
     }),
   });
-  return connector;
+
+  console.log({ operations: instance.operations });
+  return [connector, instance.operations];
 }
 
-export async function newWorker(file: string): Promise<RSocketConnector> {
+export async function newWorker(
+  file: string
+): Promise<[RSocketConnector, OperationList]> {
   const wasi: WasiOptions = {
     version: WasiVersions.SnapshotPreview1,
     args: [],
@@ -53,7 +60,8 @@ export async function newWorker(file: string): Promise<RSocketConnector> {
     stderr: 2,
   };
   const bytes = readFileSync(path.join(__dirname, file));
-  const module = await WasmRsModule.compile(bytes);
+  const mod = await WasmRsModule.compile(bytes);
+  const instance = await mod.instantiate({ wasi });
 
   const connector = new RSocketConnector({
     setup: {
@@ -62,14 +70,16 @@ export async function newWorker(file: string): Promise<RSocketConnector> {
     },
 
     transport: new WorkerClientTransport({
-      worker_url: path.join(__dirname, '../dist/worker-node.esm.js'),
-      module,
+      workerUrl: path.join(__dirname, '..', 'dist', 'worker-node.esm.js'),
+      module: mod,
+      wasi,
       options: {
         wasi,
       },
     }),
   });
-  return connector;
+  console.log({ operations: instance.operations });
+  return [connector, instance.operations];
 }
 
 export class MessagePackCodec implements Codec<unknown> {
@@ -100,8 +110,12 @@ export class JsonCodec implements Codec<unknown> {
 
 export const JSON_CODEC = new JsonCodec();
 
-export async function testStream(connector: RSocketConnector): Promise<null> {
+export async function testStream(
+  op: Operation,
+  connector: RSocketConnector
+): Promise<null> {
   const rsocket = await connector.connect();
+
   const request = RxRequestersFactory.requestChannel(
     interval(10)
       .pipe(take(50))
@@ -112,7 +126,8 @@ export async function testStream(connector: RSocketConnector): Promise<null> {
 
   return new Promise((resolve, reject) => {
     const metadata = new Map();
-    metadata.set(-1, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]));
+
+    metadata.set(0xca, op.asEncoded());
     let ok: boolean | null = null;
     let i = 0;
     request(rsocket, metadata).subscribe({
@@ -140,7 +155,10 @@ export async function testStream(connector: RSocketConnector): Promise<null> {
   });
 }
 
-export async function testRequest(connector: RSocketConnector): Promise<null> {
+export async function testRequest(
+  op: Operation,
+  connector: RSocketConnector
+): Promise<null> {
   const rsocket = await connector.connect();
   const request = RxRequestersFactory.requestResponse(
     { message: ['Hello World'] },
@@ -150,7 +168,7 @@ export async function testRequest(connector: RSocketConnector): Promise<null> {
 
   return new Promise((resolve, reject) => {
     const metadata = new Map();
-    metadata.set(-1, Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]));
+    metadata.set(0xca, op.asEncoded());
     let ok = false;
     request(rsocket, metadata).subscribe({
       next(response) {

@@ -1,13 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import DEBUG from 'debug';
 import { SetupRequest, SetupResponse } from '../worker-transport.js';
 import { FrameEvent, WasmRsInstance, WasmRsModule } from '../wasmrs.js';
+DEBUG.enabled('*');
 const debug = DEBUG('wasmrs:worker');
 
 class WorkerInstance {
-  constructor(
-    private instance: WasmRsInstance,
-    scope: DedicatedWorkerGlobalScope
-  ) {
+  constructor(private instance: WasmRsInstance, scope: any) {
     scope.addEventListener('message', (msg: MessageEvent<Buffer>) => {
       this.handleMessage(msg);
     });
@@ -15,7 +15,10 @@ class WorkerInstance {
       const msg = e as FrameEvent;
       scope.postMessage(msg.payload);
     });
-    const setupResponse: SetupResponse = { success: true };
+    const setupResponse: SetupResponse = {
+      success: true,
+      operations: instance.operations,
+    };
     debug('started');
     scope.postMessage(setupResponse);
   }
@@ -26,14 +29,15 @@ class WorkerInstance {
   }
 }
 
-export function main(scope: DedicatedWorkerGlobalScope) {
+export function main(scope: any) {
+  console.log('started worker');
   // using {once:true} is inconsistent between node and browser so we need
   // to manually add and remove our bound init listener.
   const init = async (msg: MessageEvent<SetupRequest>) => {
     scope.removeEventListener('message', init);
     debug('received init message %o', { wasi: msg.data.wasi });
-    const module = WasmRsModule.from(msg.data.module);
-    const instance = await module.instantiate({ wasi: msg.data.wasi });
+    const mod = WasmRsModule.from(msg.data.module);
+    const instance = await mod.instantiate({ wasi: msg.data.wasi });
     new WorkerInstance(instance, scope);
   };
 

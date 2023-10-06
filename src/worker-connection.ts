@@ -44,6 +44,7 @@ export class WorkerDuplexConnection
   }
 
   close(error?: Error) {
+    debug('closing worker connection');
     if (this.done) {
       super.close(error);
       return;
@@ -70,10 +71,6 @@ export class WorkerDuplexConnection
       case FrameTypes.PAYLOAD:
         break;
       case FrameTypes.KEEPALIVE:
-        debug(
-          `responding to keepalive from duplex connection`,
-          JSON.stringify(frame)
-        );
         if ((frame.flags & Flags.RESPOND) == Flags.RESPOND) {
           frame.flags ^= Flags.RESPOND;
 
@@ -97,10 +94,12 @@ export class WorkerDuplexConnection
   }
 
   private handleError = (e: ErrorEvent): void => {
-    this.close(e.error);
+    debug('error in worker: %o', e);
+    this.close(new Error(e.message));
   };
 
   private handleMessageError = (e: MessageEvent): void => {
+    debug('error handling message from worker: %o', e);
     this.close(e.data);
   };
 

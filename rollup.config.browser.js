@@ -4,7 +4,7 @@ import commonjs from '@rollup/plugin-commonjs';
 
 export function genConfig(type) {
   return {
-    input: `src/worker/worker-${type}.ts`,
+    input: `src/${type}/worker/worker-entry.ts`,
     output: [
       {
         file: `dist/worker-${type}.js`,
@@ -20,7 +20,7 @@ export function genConfig(type) {
 
     plugins: [
       typescript({
-        tsconfig: './src/worker/tsconfig.json',
+        tsconfig: `./src/${type}/worker/tsconfig.json`,
         typeRoots: ['./node_modules/@types', './types'],
       }),
       nodeResolve({

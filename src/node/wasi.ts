@@ -6,8 +6,8 @@ export class WASI implements WasiInterface {
   constructor(options: WasiOptions) {
     this.wasi = new NodeWasi(options);
   }
-  create(options: WasiOptions): WasiInterface {
-    return new WASI(options);
+  static create(options: WasiOptions): Promise<WasiInterface> {
+    return Promise.resolve(new WASI(options));
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   start(instance: any): void {

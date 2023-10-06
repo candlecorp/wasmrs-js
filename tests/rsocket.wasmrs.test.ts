@@ -9,27 +9,27 @@ describe('wasmrs', () => {
 
   describe('wasm transport', () => {
     test(`${wasmfile} requestResponse`, async () => {
-      const connector = await newConnector(wasmfile);
-      await testRequest(connector);
+      const [connector, ops] = await newConnector(wasmfile);
+      await testRequest(ops.getExport('greeting', 'sayHello'), connector);
     });
 
     test(`${wasmfile} requestChannel`, async () => {
-      const connector = await newConnector(wasmfile);
+      const [connector, ops] = await newConnector(wasmfile);
 
-      await testStream(connector);
+      await testStream(ops.getExport('echo', 'reverse'), connector);
     });
   });
 
   describe('worker transport', () => {
     test(`${wasmfile} requestResponse`, async () => {
-      const connector = await newWorker(wasmfile);
-      await testRequest(connector);
+      const [connector, ops] = await newWorker(wasmfile);
+      await testRequest(ops.getExport('greeting', 'sayHello'), connector);
     });
 
     test(`${wasmfile} requestChannel`, async () => {
-      const connector = await newWorker(wasmfile);
+      const [connector, ops] = await newWorker(wasmfile);
 
-      await testStream(connector);
+      await testStream(ops.getExport('echo', 'reverse'), connector);
     });
   });
 });

@@ -1,4 +1,3 @@
-import Worker from 'web-worker';
 import {
   ClientTransport,
   Closeable,
@@ -10,14 +9,14 @@ import {
   Outbound,
 } from 'rsocket-core';
 import { WorkerDuplexConnection } from './worker-connection';
-import { Options, WasmRsModule } from './wasmrs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { OperationList, Options, WasmRsModule } from './wasmrs';
 import { WasiOptions } from './wasi';
 import { debug } from './debug';
+import Worker from 'web-worker';
 
 export interface SetupResponse {
   success: boolean;
+  operations: OperationList;
 }
 
 export interface SetupRequest {
@@ -26,47 +25,36 @@ export interface SetupRequest {
 }
 
 export type ClientOptions = {
-  worker_url: string | URL;
-  module: WasmRsModule;
   options?: Options;
+  module: WasmRsModule;
+  wasi?: WasiOptions;
+  workerUrl: string | URL;
 
   workerFactory?: () => Promise<Worker>;
   debug?: boolean;
 };
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class WorkerClientTransport implements ClientTransport {
   private readonly factory: () => Promise<Worker>;
+  module: WasmRsModule;
+  wasiOptions?: WasiOptions;
 
   constructor(options: ClientOptions) {
-    this.factory =
-      options.workerFactory ??
-      (async () => {
-        const worker_url =
-          options.worker_url || path.join(__dirname, 'worker.js');
-        const worker = new Worker(worker_url, { type: 'module' });
-        const setupPromise = new Promise<MessageEvent<SetupResponse>>(
-          (resolve, reject) => {
-            worker.addEventListener('message', resolve, { once: true });
-            worker.addEventListener('error', reject, { once: true });
-            worker.addEventListener('messageerror', reject, { once: true });
-          }
-        );
-
-        const setup: SetupRequest = {
-          module: options.module,
-          wasi: options.options?.wasi,
-        };
-
-        worker.postMessage(setup);
-        return setupPromise.then((msg) => {
-          if (!msg.data.success) {
-            throw new Error('failed to setup worker');
-          }
-          debug('worker started');
-          return worker;
-        });
-      });
+    this.module = options.module;
+    this.wasiOptions = options.wasi;
+    if (!options.workerFactory && options.workerUrl) {
+      this.factory = async () => {
+        const workerUrl = options.workerUrl;
+        const worker = new Worker(workerUrl, { type: 'module' });
+        return worker;
+      };
+    } else if (options.workerFactory && !options.workerUrl) {
+      this.factory = options.workerFactory;
+    } else {
+      throw new Error(
+        'WorkerClientTransport requires either a workerFactory or a workerOptions'
+      );
+    }
   }
 
   connect(
@@ -75,12 +63,40 @@ export class WorkerClientTransport implements ClientTransport {
     ) => Multiplexer & Demultiplexer & FrameHandler
   ): Promise<DuplexConnection> {
     return this.factory().then((worker) => {
-      debug('starting worker connection');
-      return new WorkerDuplexConnection(
-        worker,
-        new Deserializer(),
-        multiplexerDemultiplexerFactory
-      );
+      const promise: Promise<Worker> = new Promise((res, rej) => {
+        const resolve = (msg: MessageEvent<SetupResponse>) => {
+          debug('received setup response %o', msg.data);
+          worker.removeEventListener('message', resolve);
+          worker.removeEventListener('error', reject);
+          worker.removeEventListener('messageerror', reject);
+          res(worker);
+        };
+        const reject = (msg: unknown) => {
+          debug('failed to initialize worker %o', msg);
+          worker.removeEventListener('message', resolve);
+          worker.removeEventListener('error', reject);
+          worker.removeEventListener('messageerror', reject);
+          worker.terminate();
+
+          rej(msg);
+        };
+        worker.addEventListener('message', resolve);
+        worker.addEventListener('error', reject);
+        worker.addEventListener('messageerror', reject);
+      });
+      const setup: SetupRequest = {
+        module: this.module,
+        wasi: this.wasiOptions,
+      };
+      worker.postMessage(setup);
+      return promise.then((worker) => {
+        debug('starting worker connection');
+        return new WorkerDuplexConnection(
+          worker,
+          new Deserializer(),
+          multiplexerDemultiplexerFactory
+        );
+      });
     });
   }
 }

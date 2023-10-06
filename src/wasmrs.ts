@@ -7,7 +7,13 @@ import {
   WasmRsHostProtocol,
 } from './protocol.js';
 import { Wasi, WasiInterface, WasiOptions } from './wasi.js';
-import { fromU24Bytes, toU24Bytes } from './utils.js';
+import {
+  fromU16Bytes,
+  fromU24Bytes,
+  fromU32Bytes,
+  toU24Bytes,
+  toU32Bytes,
+} from './utils.js';
 
 type HostCall = (
   binding: string,
@@ -62,8 +68,8 @@ export class WasmRsModule {
   }
 
   static async compile(source: ArrayBufferLike): Promise<WasmRsModule> {
-    const module = WebAssembly.compile(source);
-    return new WasmRsModule(await module);
+    const mod = WebAssembly.compile(source);
+    return new WasmRsModule(await mod);
   }
 
   static async compileStreaming(source: Response): Promise<WasmRsModule> {
@@ -74,8 +80,8 @@ export class WasmRsModule {
       const bytes = new Uint8Array(await (await source).arrayBuffer());
       return WasmRsModule.compile(bytes);
     }
-    const module = WebAssembly.compileStreaming(source);
-    return new WasmRsModule(await module);
+    const mod = WebAssembly.compileStreaming(source);
+    return new WasmRsModule(await mod);
   }
 
   async instantiate(options: Options = {}): Promise<WasmRsInstance> {
@@ -87,7 +93,7 @@ export class WasmRsModule {
           'Wasi options provided but no WASI implementation found'
         );
       }
-      wasi = new WASI(options.wasi);
+      wasi = await WASI.create(options.wasi);
     }
     const imports = linkImports(host, wasi);
     debug('instantiating wasm module');
@@ -111,6 +117,7 @@ export class WasmRsInstance extends EventTarget {
   textEncoder: TextEncoder;
   textDecoder: TextDecoder;
   instance!: WebAssembly.Instance;
+  operations = new OperationList([], []);
 
   constructor(options: Options = {}) {
     super();
@@ -134,21 +141,26 @@ export class WasmRsInstance extends EventTarget {
       debug(`>>>`, `${GuestProtocolMethods.START}()`);
       start([]);
     }
-
-    const init = this.getExport(GuestProtocolMethods.INIT);
+    const init = this.getProtocolExport(GuestProtocolMethods.INIT);
     const size = 512 * 1024;
     debug(`>>>`, `${GuestProtocolMethods.INIT}(${size},${size},${size})`);
     init(size, size, size);
 
-    this.guestSend = this.getExport(GuestProtocolMethods.SEND);
+    const opList = this.getProtocolExport(GuestProtocolMethods.OP_LIST_REQUEST);
+    if (opList != null) {
+      debug(`>>>`, `${GuestProtocolMethods.OP_LIST_REQUEST}()`);
+      opList();
+    }
 
-    this.guestOpListRequest = this.getExport(
+    this.guestSend = this.getProtocolExport(GuestProtocolMethods.SEND);
+
+    this.guestOpListRequest = this.getProtocolExport(
       GuestProtocolMethods.OP_LIST_REQUEST
     );
     debug('initialized wasm module');
   }
 
-  getExport<N extends keyof WasmRsGuestProtocol>(
+  getProtocolExport<N extends keyof WasmRsGuestProtocol>(
     name: N
   ): WasmRsGuestProtocol[N] {
     const fn = this.instance.exports[name] as unknown as WasmRsGuestProtocol[N];
@@ -215,22 +227,6 @@ export interface Options {
   wasi?: WasiOptions;
 }
 
-export async function instantiate(
-  source: ArrayBufferLike,
-  options: Options = {}
-): Promise<WasmRsInstance> {
-  const module = await WasmRsModule.compile(source);
-  return await module.instantiate(options);
-}
-
-export async function instantiateStreaming(
-  source: Response | Promise<Response>,
-  options: Options = {}
-): Promise<WasmRsInstance> {
-  const module = await WasmRsModule.compileStreaming(await source);
-  return await module.instantiate(options);
-}
-
 function linkHostExports(
   instance: WasmRsInstance
 ): WasmRsHostProtocol & WebAssembly.ModuleImports {
@@ -284,14 +280,165 @@ function linkHostExports(
     },
 
     [HostProtocolMethods.OP_LIST](ptr: number, length: number) {
-      debug('<<< __op_list(%o)', ptr);
+      debug('<<< __op_list(%o,%o)', ptr, length);
+      const buffer = new Uint8Array(instance.getCallerMemory().buffer);
+      const bytes = buffer.slice(ptr, ptr + length);
+      if (length === 0) {
+        return;
+      }
+      if (bytes.slice(0, 4).toString() !== OP_MAGIC_BYTES.toString()) {
+        throw new Error('invalid op_list magic bytes');
+      }
+      const version = fromU16Bytes(bytes.slice(4, 6));
 
-      const mem = instance.getCallerMemory();
-      const buffer = new Uint8Array(mem.buffer);
-      const opListData = instance.textDecoder.decode(
-        buffer.slice(ptr, ptr + length)
-      );
-      debug(`${opListData}`);
+      debug(`op_list bytes: %o`, bytes);
+
+      if (version == 1) {
+        const ops = decodeV1Operations(bytes.slice(6), instance.textDecoder);
+        debug('module operations: %o', ops);
+        instance.operations = ops;
+      }
     },
   };
 }
+
+function decodeV1Operations(
+  buffer: Uint8Array,
+  decoder: TextDecoder
+): OperationList {
+  const imports = [];
+  const exports = [];
+  let numOps = fromU32Bytes(buffer.slice(0, 4));
+  debug(`decoding %o operations`, numOps);
+  let index = 4;
+
+  while (numOps > 0) {
+    const kind = buffer[index++];
+    const dir = buffer[index++];
+    const opIndex = fromU32Bytes(buffer.slice(index, index + 4));
+    index += 4;
+    const nsLen = fromU16Bytes(buffer.slice(index, index + 2));
+    index += 2;
+    const namespace = decoder.decode(buffer.slice(index, index + nsLen));
+    index += nsLen;
+    const opLen = fromU16Bytes(buffer.slice(index, index + 2));
+    index += 2;
+    const operation = decoder.decode(buffer.slice(index, index + opLen));
+    index += opLen;
+    const reservedLen = fromU16Bytes(buffer.slice(index, index + 2));
+    index += 2 + reservedLen;
+    const op = new Operation(opIndex, kind, namespace, operation);
+    if (dir === 1) {
+      exports.push(op);
+    } else {
+      imports.push(op);
+    }
+    numOps--;
+  }
+
+  return new OperationList(imports, exports);
+}
+
+export class OperationList {
+  imports: Operation[];
+  exports: Operation[];
+  constructor(imports: Operation[], exports: Operation[]) {
+    this.imports = imports;
+    this.exports = exports;
+  }
+
+  getExport(namespace: string, operation: string): Operation {
+    const op = this.exports.find(
+      (op) => op.namespace === namespace && op.operation === operation
+    );
+
+    if (!op) {
+      throw new Error(
+        `operation ${namespace}::${operation} not found in exports`
+      );
+    }
+
+    return op;
+  }
+
+  getImport(namespace: string, operation: string): Operation {
+    const op = this.imports.find(
+      (op) => op.namespace === namespace && op.operation === operation
+    );
+
+    if (!op) {
+      throw new Error(
+        `operation ${namespace}::${operation} not found in imports`
+      );
+    }
+
+    return op;
+  }
+}
+
+export class Operation {
+  index: number;
+  kind: OperationType;
+  namespace: string;
+  operation: string;
+  constructor(
+    index: number,
+    kind: OperationType,
+    namespace: string,
+    operation: string
+  ) {
+    this.index = index;
+    this.kind = kind;
+    this.namespace = namespace;
+    this.operation = operation;
+  }
+
+  asEncoded(): Uint8Array {
+    const index = toU32Bytes(this.index);
+    const encoded = new Uint8Array(index.length + 4);
+    encoded.set(index);
+    encoded.set(toU32Bytes(0), index.length);
+    return encoded;
+  }
+}
+
+enum OperationType {
+  RR = 0,
+  FNF = 1,
+  RS = 2,
+  RC = 3,
+}
+
+/*
+
+  fn decode_v1(mut buf: Bytes) -> Result<Self, Error> {
+    let num_ops = from_u32_bytes(&buf.split_to(4));
+    let mut imports = Vec::new();
+    let mut exports = Vec::new();
+    for _ in 0..num_ops {
+      let kind = buf.split_to(1)[0];
+      let kind: OperationType = kind.into();
+      let dir = buf.split_to(1)[0];
+      let index = from_u32_bytes(&buf.split_to(4));
+      let ns_len = from_u16_bytes(&buf.split_to(2));
+      let namespace = String::from_utf8(buf.split_to(ns_len as _).to_vec())?;
+      let op_len = from_u16_bytes(&buf.split_to(2));
+      let operation = String::from_utf8(buf.split_to(op_len as _).to_vec())?;
+      let _reserved_len = from_u16_bytes(&buf.split_to(2));
+      let op = Operation {
+        index,
+        kind,
+        namespace,
+        operation,
+      };
+      if dir == 1 {
+        exports.push(op);
+      } else {
+        imports.push(op);
+      }
+    }
+    Ok(Self { imports, exports })
+  }
+*/
+
+const OP_MAGIC_BYTES = Uint8Array.from([0x00, 0x77, 0x72, 0x73]);
