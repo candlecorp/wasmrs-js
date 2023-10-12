@@ -2,6 +2,7 @@
   "name": "wasmrs-js",
   "description": "A JavaScript implementation of the RSocket protocol over WebAssembly.",
   "license": "Apache-2.0",
+  "version":"0.2.1",
   "scripts": {
     "test": "npm run test:unit",
     "test:unit": "npm run build:worker:node && NODE_OPTIONS=--experimental-vm-modules jest --coverage --detectOpenHandles",
