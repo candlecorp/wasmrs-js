@@ -40,7 +40,6 @@ async function openOpfsDirectory(
   const files: Record<string, SyncOPFSFile | PreopenDirectory> = {};
 
   for await (const [name, item] of root.entries()) {
-    console.log({ name, item });
     if (item.kind === 'file') {
       const file = item as FileSystemFileHandle;
       files[name] = new SyncOPFSFile(await file.createSyncAccessHandle());
@@ -86,7 +85,6 @@ export class WASI implements WasiInterface {
     for (const [to, from] of Object.entries(options.preopens || {})) {
       if (from.startsWith('opfs:')) {
         const opfsPath = from.slice(5);
-        console.log({ opfsPath });
         if (opfsPath === '/') {
           files.push(await openOpfsDirectory(opfsRoot, to));
         } else {
@@ -97,7 +95,6 @@ export class WASI implements WasiInterface {
         }
       }
     }
-    console.log(files);
     const env = Object.entries(options.env || {}).map(
       ([key, value]) => `${key}=${value}`
     );

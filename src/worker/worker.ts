@@ -3,7 +3,6 @@
 import DEBUG from 'debug';
 import { SetupRequest, SetupResponse } from '../worker-transport.js';
 import { FrameEvent, WasmRsInstance, WasmRsModule } from '../wasmrs.js';
-DEBUG.enabled('*');
 const debug = DEBUG('wasmrs:worker');
 
 class WorkerInstance {
@@ -30,7 +29,7 @@ class WorkerInstance {
 }
 
 export function main(scope: any) {
-  console.log('started worker');
+  DEBUG.enabled('wasmrs:worker*');
   // using {once:true} is inconsistent between node and browser so we need
   // to manually add and remove our bound init listener.
   const init = async (msg: MessageEvent<SetupRequest>) => {
