@@ -8,10 +8,10 @@ import {
   Multiplexer,
   Outbound,
 } from 'rsocket-core';
-import { WorkerDuplexConnection } from './worker-connection';
-import { OperationList, Options, WasmRsModule } from './wasmrs';
-import { WasiOptions } from './wasi';
-import { debug } from './debug';
+import { WorkerDuplexConnection } from './worker-connection.js';
+import { OperationList, Options, WasmRsModule } from './wasmrs.js';
+import { WasiOptions } from './wasi.js';
+import { debug } from './debug.js';
 import Worker from 'web-worker';
 
 export interface SetupResponse {
