@@ -105,6 +105,10 @@ export class WasmRsModule {
 
     return host;
   }
+
+  customSection(name: string): ArrayBuffer[] {
+    return WebAssembly.Module.customSections(this.module, name);
+  }
 }
 
 export class WasmRsInstance extends EventTarget {
@@ -408,37 +412,5 @@ enum OperationType {
   RS = 2,
   RC = 3,
 }
-
-/*
-
-  fn decode_v1(mut buf: Bytes) -> Result<Self, Error> {
-    let num_ops = from_u32_bytes(&buf.split_to(4));
-    let mut imports = Vec::new();
-    let mut exports = Vec::new();
-    for _ in 0..num_ops {
-      let kind = buf.split_to(1)[0];
-      let kind: OperationType = kind.into();
-      let dir = buf.split_to(1)[0];
-      let index = from_u32_bytes(&buf.split_to(4));
-      let ns_len = from_u16_bytes(&buf.split_to(2));
-      let namespace = String::from_utf8(buf.split_to(ns_len as _).to_vec())?;
-      let op_len = from_u16_bytes(&buf.split_to(2));
-      let operation = String::from_utf8(buf.split_to(op_len as _).to_vec())?;
-      let _reserved_len = from_u16_bytes(&buf.split_to(2));
-      let op = Operation {
-        index,
-        kind,
-        namespace,
-        operation,
-      };
-      if dir == 1 {
-        exports.push(op);
-      } else {
-        imports.push(op);
-      }
-    }
-    Ok(Self { imports, exports })
-  }
-*/
 
 const OP_MAGIC_BYTES = Uint8Array.from([0x00, 0x77, 0x72, 0x73]);
